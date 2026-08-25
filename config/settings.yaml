@@ -1,0 +1,9 @@
+app:
+  mode: local_demo
+  human_approval_required: true
+analysis:
+  minimum_sample_size: 5
+  review_threshold: 80
+content_mix:
+  value: 80
+  monetization: 20

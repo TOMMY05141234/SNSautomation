@@ -1,0 +1,4 @@
+funnel:
+  stages: [impression, profile_click, link_click, affiliate_click, conversion]
+  attribution: post_utm
+currency: JPY
