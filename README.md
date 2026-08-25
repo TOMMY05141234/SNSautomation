@@ -20,11 +20,11 @@
 ## 3分で起動
 
 ```bash
-npm run seed
 npm start
+# デモ投稿・実績も入れたい場合のみ、起動前に npm run seed
 ```
 
-ブラウザで <http://localhost:3001> を開きます。承認・編集・却下でDBが更新されます。初期状態へ戻す場合は停止後に`npm run seed`を再実行してください。
+ブラウザで <http://localhost:3001> を開きます。初回起動時にアカウントを自動初期化します。「5案を生成」から投稿生成・AIレビュー・人間承認を開始でき、承認後は予約・デモ投稿完了まで状態を進められます。初期状態へ戻す場合は停止後に`npm run seed`を再実行してください。
 
 ## テスト
 
@@ -39,10 +39,14 @@ unitではKPI、ゼロ除算、revenue-first評価を、integrationでは投稿�
 
 | Method | Path | Purpose |
 |---|---|---|
+| GET | `/api/health` | サーバー・DBヘルスチェック |
 | GET | `/api/dashboard?range=30` | 承認キュー、KPI、ランキング、insight |
+| GET | `/api/posts?status=posted` | 投稿一覧・状態絞り込み |
+| POST | `/api/posts/generate` | ローカル5案生成、AIレビュー、承認待ち登録 |
 | PATCH | `/api/posts/:id` | 人間による本文編集 |
 | PATCH | `/api/posts/:id/status` | 許可済み状態遷移 |
-| PUT | `/api/posts/:id/metrics` | 実績登録/更新 |
+| PUT | `/api/posts/:id/metrics` | 投稿済み投稿の実績登録/更新 |
+| POST | `/api/analysis/run` | 実績から根拠付き改善案を再生成 |
 
 ## 設計資料
 
@@ -54,8 +58,8 @@ unitではKPI、ゼロ除算、revenue-first評価を、integrationでは投稿�
 ## 現在の制約 / 次の実装
 
 1. YAMLは人間向け設定例で、アプリへの設定ローダーは次Phase。
-2. 日付範囲タブはAPI境界を備えるが、seed件数が少ないため集計期間filterは次Phase。
-3. 実績登録APIは実装済み。UIフォームは次Phase。
+2. 今日・7日・30日の期間filterは実装済み。前期間との厳密な比較値は次Phase。
+3. 投稿生成・AIレビュー・承認・予約・デモ投稿・再分析はUI接続済み。詳細な実績入力フォームは次Phase。
 4. 投稿企画30件、5 variant、80点未満のv2再稿をprovider interfaceとして実装する。
 5. proposed_rules承認後にのみcurrent_rulesへ反映するワークフローを追加する。
 6. SNS公式API接続は明示承認を得た後にadapterとして実装する。
