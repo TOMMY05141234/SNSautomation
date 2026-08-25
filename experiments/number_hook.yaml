@@ -1,0 +1,7 @@
+experiment:
+  name: 数字入りフック
+  hypothesis: 冒頭10文字以内の数字でimpressionが20%増加する
+  test: { control: 10, variation: 10 }
+  primary_metric: impressions
+  secondary_metric: profile_ctr
+  status: proposed

@@ -1,0 +1,5 @@
+products:
+  - id: techgo
+    name: エンジニア転職無料相談（デモ）
+    kind: affiliate
+    disclosure_required: true

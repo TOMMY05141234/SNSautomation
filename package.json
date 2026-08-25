@@ -1,0 +1,13 @@
+{
+  "name": "sns-growth-os",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "seed": "node src/database/seed.js",
+    "test": "node --test tests/*.test.js",
+    "check": "node --check src/server.js && node --check dashboard/app.js"
+  }
+}

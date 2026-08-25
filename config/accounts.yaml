@@ -1,0 +1,19 @@
+accounts:
+  - id: engineer_career_x
+    platform: x
+    name: エンジニア転職ラボ
+    handle: "@career_engineer"
+    niche:
+      primary: エンジニア転職
+      secondary: [SES, 年収アップ, キャリア, 面接対策]
+    target:
+      age: 25-35
+      occupation: ITエンジニア
+      experience: 2年以上
+    monetization:
+      type: affiliate
+      offer: techgo
+    posting:
+      daily_posts: 3
+      timezone: Asia/Tokyo
+      preferred_times: ["07:30", "12:10", "21:00"]
