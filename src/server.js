@@ -1,17 +1,28 @@
-import { AppError, ensureBootstrap, dashboardData, listPosts, generateCandidates, analyze, updateContent, changeStatus, saveMetrics } from './database/d1-repository.js';
+import { createServer } from 'node:http';
+import { readFileSync, existsSync } from 'node:fs';
+import { extname, join, normalize } from 'node:path';
+import { dashboardData, changeStatus, updateContent, saveMetrics } from './database/repository.js';
+import { getDb } from './database/db.js';
 
-const json=(payload,status=200)=>Response.json(payload,{status,headers:{'cache-control':'no-store'}});
-async function body(request){const length=Number(request.headers.get('content-length')||0);if(length>1_000_000)throw new AppError('リクエストが大きすぎます',413);try{return await request.json();}catch{throw new AppError('JSON形式が不正です');}}
-function idFrom(path,suffix=''){const match=path.match(new RegExp(`^/api/posts/(?<id>\\d+)${suffix}$`));return match?Number(match.groups.id):null;}
-async function api(request,env){if(!env.DB)throw new AppError('D1 binding DB が設定されていません',503);await ensureBootstrap(env.DB);const url=new URL(request.url);const path=url.pathname;
-  if(path==='/api/health'&&request.method==='GET')return json({status:'ok',database:'d1',storage:env.CONTENT_STORE?'kv':'not_configured',time:new Date().toISOString()});
-  if(path==='/api/dashboard'&&request.method==='GET')return json(await dashboardData(env.DB,url.searchParams.get('range')));
-  if(path==='/api/posts'&&request.method==='GET')return json({items:await listPosts(env.DB,{status:url.searchParams.get('status')||undefined,limit:url.searchParams.get('limit')})});
-  if(path==='/api/posts/generate'&&request.method==='POST')return json({items:await generateCandidates(env.DB,env.CONTENT_STORE,await body(request))},201);
-  if(path==='/api/analysis/run'&&request.method==='POST'){const input=await body(request);return json(await analyze(env.DB,input.range||30),201);}
-  let id=idFrom(path);if(id&&request.method==='PATCH')return json(await updateContent(env.DB,id,(await body(request)).content));
-  id=idFrom(path,'/status');if(id&&request.method==='PATCH'){const input=await body(request);return json(await changeStatus(env.DB,id,input.status,input.note,{scheduledAt:input.scheduled_at,postedAt:input.posted_at}));}
-  id=idFrom(path,'/metrics');if(id&&request.method==='PUT')return json(await saveMetrics(env.DB,id,await body(request)));
-  return json({error:'APIが見つかりません'},404);
-}
-export default {async fetch(request,env){try{const url=new URL(request.url);if(url.pathname.startsWith('/api/'))return await api(request,env);if(!env.ASSETS)throw new AppError('Static Assets binding ASSETS が設定されていません',503);return env.ASSETS.fetch(request);}catch(error){console.error(error);return json({error:error instanceof AppError?error.message:'サーバー内部でエラーが発生しました'},error instanceof AppError?error.status:500);}}};
+const port = Number(process.env.PORT || 3001);
+const mime = {'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml'};
+const send = (res, status, body, type='application/json; charset=utf-8') => { res.writeHead(status, {'content-type':type}); res.end(type.startsWith('application/json') ? JSON.stringify(body) : body); };
+async function body(req) { let raw=''; for await (const chunk of req) raw += chunk; return raw ? JSON.parse(raw) : {}; }
+export const server = createServer(async (req,res) => {
+  try {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    if (url.pathname === '/api/dashboard' && req.method === 'GET') return send(res,200,dashboardData(getDb(),Number(url.searchParams.get('range')||30)));
+    const statusMatch = url.pathname.match(/^\/api\/posts\/(\d+)\/status$/);
+    if (statusMatch && req.method === 'PATCH') { const input=await body(req); return send(res,200,changeStatus(Number(statusMatch[1]),input.status,input.note)); }
+    const postMatch = url.pathname.match(/^\/api\/posts\/(\d+)$/);
+    if (postMatch && req.method === 'PATCH') { const input=await body(req); return send(res,200,updateContent(Number(postMatch[1]),input.content)); }
+    const metricsMatch = url.pathname.match(/^\/api\/posts\/(\d+)\/metrics$/);
+    if (metricsMatch && req.method === 'PUT') return send(res,200,saveMetrics(Number(metricsMatch[1]),await body(req)));
+    if (url.pathname.startsWith('/api/')) return send(res,404,{error:'APIが見つかりません'});
+    const requested = url.pathname === '/' ? 'index.html' : normalize(url.pathname).replace(/^[/\\]+/, '');
+    const file = join(process.cwd(),'dashboard',requested);
+    if (!file.startsWith(join(process.cwd(),'dashboard')) || !existsSync(file)) return send(res,404,'Not found','text/plain');
+    return send(res,200,readFileSync(file),mime[extname(file)]||'application/octet-stream');
+  } catch (error) { return send(res,error.message.includes('変更できません') ? 409 : 400,{error:error.message}); }
+});
+if (process.argv[1]?.endsWith('server.js')) server.listen(port,()=>console.log(`SNS Growth OS: http://localhost:${port}`));

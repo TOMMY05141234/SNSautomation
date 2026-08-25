@@ -1,60 +1,30 @@
-# SNS Growth OS — Cloudflare Workers MVP
+# SNS Growth OS — Local MVP
 
-X・1アカウントの「投稿候補生成 → AIレビュー → 人間承認 → 予約 → 投稿済み化 → 実績登録 → 分析」をCloudflare上で動かすMVPです。SNS/外部AI APIはまだ呼ばず、決定的なデモ生成器を使用します。
+売上につながる投稿パターンを、人間の承認を残したまま検証するSNSマーケティングOSの最初の縦切りです。現在は**X・1アカウント・ローカルダミーデータのみ**。SNS APIや外部AI APIは呼びません。
 
-## 構成
+## 今回実装した範囲
 
-- **Cloudflare Workers:** `src/server.js`のES Modules `fetch()` handler
-- **D1:** アカウント、投稿、承認履歴、実績、insight、AI実行メタデータ
-- **KV (`CONTENT_STORE`):** AI生成runのJSON artifact（90日TTL）
-- **Workers Static Assets (`ASSETS`):** `dashboard/`のHTML/CSS/JS
-- **Core:** KPI計算と生成ルールはplatform adapterから独立
+- SQLiteスキーマ：アカウント、投稿、9軸AI review結果、状態履歴、実績、AI insight、AI実行ログ
+- `pending_human_review → approved/rejected`の承認UI、本文編集
+- IMP/ER/フォロー/クリック/CV/売上と、売上優先のTOP/WORSTランキング
+- `data → interpretation → action`およびsource/母数/期間/confidence付きinsight
+- 将来のX/Instagram/Threads adapterをcoreから分離するディレクトリ境界
 
-## 初回セットアップ
+> 投稿生成とAI reviewは現時点ではseed済みの決定的ダミー成果物です。外部AIを使用しないため、再現性と安全性を保って承認以降のフローを確認できます。
 
-Node.jsとCloudflareアカウントが必要です。
+## 必要環境
 
-```bash
-npm install
-npx wrangler login
-npx wrangler d1 create sns-growth-os-db
-npx wrangler kv namespace create CONTENT_STORE
-```
+- Node.js 22.5以降（`node:sqlite`を使用。確認環境 Node 24）
+- npm依存パッケージなし
 
-作成結果のD1 `database_id`とKV `id`を`wrangler.jsonc`のプレースホルダーへ設定します。IDは秘密鍵ではありませんが、環境ごとの値として管理してください。
-
-## D1 migration
+## 3分で起動
 
 ```bash
-npm run db:migrate:local
-npm run db:migrate:remote
+npm run seed
+npm start
 ```
 
-migrationはテーブル、index、最初のデモアカウントを作成します。削除処理は含みません。
-
-## ローカル起動とデプロイ
-
-```bash
-npm run dev
-# http://localhost:8787
-
-npm run deploy
-```
-
-Workersから`DB`、`CONTENT_STORE`、`ASSETS` bindingsが渡されます。Node HTTP serverやローカルSQLiteファイルは使用しません。
-
-## API
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/api/health` | Workers・D1・KV binding確認 |
-| GET | `/api/dashboard?range=30` | 承認キュー、期間KPI、ランキング、insight |
-| GET | `/api/posts?status=posted` | 投稿一覧 |
-| POST | `/api/posts/generate` | 1〜5案生成、レビュー、承認待ち登録、KV artifact保存 |
-| PATCH | `/api/posts/:id` | 承認待ち/承認済み本文の人間編集 |
-| PATCH | `/api/posts/:id/status` | 許可済み状態遷移。予約には`scheduled_at`必須 |
-| PUT | `/api/posts/:id/metrics` | 投稿済み投稿のみ実績登録 |
-| POST | `/api/analysis/run` | D1実績から根拠付き改善案を生成 |
+ブラウザで <http://localhost:3001> を開きます。承認・編集・却下でDBが更新されます。初期状態へ戻す場合は停止後に`npm run seed`を再実行してください。
 
 ## テスト
 
@@ -63,11 +33,33 @@ npm test
 npm run check
 ```
 
-テストはインメモリD1互換mockとKV/Assets mockへWorkers `fetch()` handlerを直接接続し、生成から実績・分析までをHTTP Request/Responseで検証します。
+unitではKPI、ゼロ除算、revenue-first評価を、integrationでは投稿保存・編集・状態遷移・実績登録・集計をインメモリSQLiteで検証します。
 
-## 安全性
+## API（ローカル）
 
-- `pending_human_review → approved`を経なければ予約できません。
-- 本番SNS投稿、外部AI、課金、ルール自動反映は行いません。
-- insightは`source / sample_size / period / confidence`を必須とします。
-- APIキーやtokenは`wrangler secret put`で登録し、Gitへ保存しません。
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/dashboard?range=30` | 承認キュー、KPI、ランキング、insight |
+| PATCH | `/api/posts/:id` | 人間による本文編集 |
+| PATCH | `/api/posts/:id/status` | 許可済み状態遷移 |
+| PUT | `/api/posts/:id/metrics` | 実績登録/更新 |
+
+## 設計資料
+
+- [要件と非対象](docs/requirements.md)
+- [システム構成](docs/architecture.md)
+- [段階的ロードマップ](docs/roadmap.md)
+- [DB schema](db/schema.sql)
+
+## 現在の制約 / 次の実装
+
+1. YAMLは人間向け設定例で、アプリへの設定ローダーは次Phase。
+2. 日付範囲タブはAPI境界を備えるが、seed件数が少ないため集計期間filterは次Phase。
+3. 実績登録APIは実装済み。UIフォームは次Phase。
+4. 投稿企画30件、5 variant、80点未満のv2再稿をprovider interfaceとして実装する。
+5. proposed_rules承認後にのみcurrent_rulesへ反映するワークフローを追加する。
+6. SNS公式API接続は明示承認を得た後にadapterとして実装する。
+
+## セキュリティ
+
+`.env`、API key、token、個人情報、ローカルDBはGit対象外です。本番投稿、課金、ルールの自動上書きは行いません。

@@ -1,13 +1,15 @@
-# Cloudflare Workers構成
+# システム構成
 
 ```text
-Browser
-  ├─ /             → Workers Static Assets (dashboard/)
-  └─ /api/*        → Worker ES module fetch handler
-                         ├─ D1 binding DB
-                         │    accounts / posts / metrics / history / insights / ai_runs
-                         └─ KV binding CONTENT_STORE
-                              AI run JSON artifacts (90-day TTL)
+Dashboard (static HTML/CSS/JS)
+  ↓ JSON/HTTP
+Local Node API
+  ├─ database/repository: 投稿・承認・実績
+  ├─ analytics: KPIとrevenue-firstランキング
+  ├─ agents/generators: 将来のAI境界
+  └─ integrations/{x,instagram,threads}: 将来のSNS adapter境界
+  ↓
+SQLite (accounts, posts, metrics, history, insights, ai_runs)
 ```
 
-`wrangler.jsonc`の`run_worker_first: ["/api/*"]`によりAPIだけをWorkerへ先に送り、それ以外は`ASSETS.fetch()`で配信する。D1 repositoryは非同期binding APIだけに依存し、Node.jsのHTTP、filesystem、SQLite APIを使用しない。SNS固有adapterは引き続き`src/integrations`へ隔離する。
+Node標準機能のみでローカル起動できる。プラットフォーム依存コードは`src/integrations`内のadapterに限定し、投稿ライフサイクルやKPI計算には持ち込まない。
